@@ -2,6 +2,7 @@
 
 > **Cross-Platform Workspace-Scoped Conversation Picker for Google Antigravity CLI**
 
+[![npm version](https://img.shields.io/npm/v/agy-resume.svg)](https://www.npmjs.com/package/agy-resume)
 [![CI](https://github.com/DebadityaHait/agy-resume/actions/workflows/ci.yml/badge.svg)](https://github.com/DebadityaHait/agy-resume/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Node.js](https://img.shields.io/badge/Node.js-22%2B-green.svg)](https://nodejs.org/)
