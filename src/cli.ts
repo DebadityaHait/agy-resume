@@ -180,27 +180,25 @@ export async function main(argv: string[] = process.argv): Promise<number> {
   });
 }
 
-// Direct CLI invocation
-if (process.argv[1] && (process.argv[1].endsWith("cli.js") || process.argv[1].endsWith("cli.ts"))) {
-  main().then(
-    (code) => {
-      process.exit(code);
-    },
-    (err: unknown) => {
-      if (err instanceof AgyResumeError) {
-        console.error(pc.red(`\n${err.message}\n`));
-        process.exit(err.exitCode);
-      } else if (err instanceof Error) {
-        if (logger.isDebug()) {
-          console.error(err);
-        } else {
-          console.error(pc.red(`\nError: ${err.message}\n`));
-        }
-        process.exit(ExitCode.ERROR);
+// Execute CLI
+main().then(
+  (code) => {
+    process.exit(code);
+  },
+  (err: unknown) => {
+    if (err instanceof AgyResumeError) {
+      console.error(pc.red(`\n${err.message}\n`));
+      process.exit(err.exitCode);
+    } else if (err instanceof Error) {
+      if (logger.isDebug()) {
+        console.error(err);
       } else {
-        console.error(pc.red(`\nUnexpected error: ${String(err)}\n`));
-        process.exit(ExitCode.ERROR);
+        console.error(pc.red(`\nError: ${err.message}\n`));
       }
+      process.exit(ExitCode.ERROR);
+    } else {
+      console.error(pc.red(`\nUnexpected error: ${String(err)}\n`));
+      process.exit(ExitCode.ERROR);
     }
-  );
-}
+  }
+);

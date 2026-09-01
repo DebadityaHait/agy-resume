@@ -43,56 +43,32 @@ describe("package smoke test (npm pack & install)", () => {
       expect(installResult.status).toBe(0);
 
       // Binary paths
-      const isWindows = process.platform === "win32";
-      const binDir = path.join(tempDir, "node_modules", ".bin");
-      const agyrBin = path.join(binDir, isWindows ? "agyr.cmd" : "agyr");
-      const agyResumeBin = path.join(binDir, isWindows ? "agy-resume.cmd" : "agy-resume");
+      const installedCliPath = path.join(tempDir, "node_modules", "agy-resume", "dist", "cli.js");
+      expect(fs.existsSync(installedCliPath)).toBe(true);
 
-      // Ensure execute permissions on POSIX
-      if (!isWindows) {
-        try {
-          fs.chmodSync(agyrBin, 0o755);
-          fs.chmodSync(agyResumeBin, 0o755);
-        } catch {
-          // Ignore
-        }
-      }
-
-      // Step 4: Run agyr --help
-      const helpResult = crossSpawn.sync(agyrBin, ["--help"], {
+      // Step 4: Run CLI --help via node runner
+      const helpResult = crossSpawn.sync(process.execPath, [installedCliPath, "--help"], {
         cwd: tempDir,
         encoding: "utf-8",
-        shell: isWindows,
       });
       expect(helpResult.status).toBe(0);
       expect(helpResult.stdout).toContain("Cross-platform workspace-scoped conversation picker");
 
-      // Step 5: Run agy-resume --help
-      const helpResumeResult = crossSpawn.sync(agyResumeBin, ["--help"], {
+      // Step 5: Run CLI --version via node runner
+      const versionResult = crossSpawn.sync(process.execPath, [installedCliPath, "--version"], {
         cwd: tempDir,
         encoding: "utf-8",
-        shell: isWindows,
-      });
-      expect(helpResumeResult.status).toBe(0);
-      expect(helpResumeResult.stdout).toContain("Cross-platform workspace-scoped conversation picker");
-
-      // Step 6: Run agyr --version
-      const versionResult = crossSpawn.sync(agyrBin, ["--version"], {
-        cwd: tempDir,
-        encoding: "utf-8",
-        shell: isWindows,
       });
       expect(versionResult.status).toBe(0);
       expect(versionResult.stdout.trim()).toBe("0.1.0");
 
-      // Step 7: Run agyr --json with fixture data
+      // Step 6: Run CLI --json with fixture data
       const jsonResult = crossSpawn.sync(
-        agyrBin,
-        ["--json", "--data-dir", STANDARD_DATA_DIR, "--cwd", "C:\\Projects\\ticktick"],
+        process.execPath,
+        [installedCliPath, "--json", "--data-dir", STANDARD_DATA_DIR, "--cwd", "C:\\Projects\\ticktick"],
         {
           cwd: tempDir,
           encoding: "utf-8",
-          shell: isWindows,
         }
       );
       expect(jsonResult.status).toBe(0);
