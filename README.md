@@ -18,16 +18,21 @@
 By default, the Antigravity CLI displays a global list of conversations from across all directories on your machine:
 
 ```text
-Conversations
+  Conversations
+  Type to search conversations...
+> Implement Authentication Service                                              auth-service     402 steps        3m ago
+  Database Migration Scripts                                                      db-service      51 steps        9m ago
+  Frontend Navigation Redesign                                                       web-app     590 steps       44m ago
+  Payment Gateway Integration                                                        billing      89 steps       55m ago
+  API Documentation Update                                                          api-docs       3 steps        1h ago
+  Optimize Postgres Connection Pool                                               db-service      46 steps        5h ago
+  Refactor OAuth Token Store                                                    auth-service      22 steps        1d ago
+  [1-7 of 42 items]
 
-> Implement Authentication Service       auth-service
-  Database Migration Scripts             db-service
-  Frontend Navigation Redesign           web-app
-  Payment Gateway Integration            billing
-  API Documentation Update               api-docs
+Keyboard: ↑/↓ Navigate  ←/→ Page  enter Select  f2 Rename  f4 Delete  tab Switch Tab  esc Go back / Clear search
 ```
 
-When you are working in `~/projects/auth-service` (or `C:\projects\auth-service`), browsing through unrelated projects creates unnecessary friction.
+When you are working inside `~/projects/auth-service` (or `C:\projects\auth-service`), browsing through dozens of unrelated global projects creates unnecessary friction.
 
 With **`agyr`**, you get immediate, directory-scoped session discovery:
 
@@ -37,10 +42,10 @@ With **`agyr`**, you get immediate, directory-scoped session discovery:
 
   Search: _
 
-> Implement Authentication Service       auth-service    25 steps   3m ago
-  Check OAuth Token Refresh              auth-service    12 steps  16m ago
-  Fix JWT signature verification          auth-service     5 steps   2d ago
-  Add unit test coverage                  auth-service     8 steps   5d ago
+> Implement Authentication Service                                              auth-service     402 steps        3m ago
+  Refactor OAuth Token Store                                                    auth-service      22 steps        1d ago
+  Fix JWT Signature Verification                                                auth-service       5 steps        2d ago
+  Add Auth Unit Test Coverage                                                   auth-service       8 steps        5d ago
 
   4 conversations
 

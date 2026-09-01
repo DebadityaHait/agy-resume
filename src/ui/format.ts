@@ -89,7 +89,8 @@ export function truncateString(str: string, maxWidth: number): string {
 }
 
 /**
- * Formats an interactive picker row with title, directory, step count, and relative time.
+ * Formats an interactive picker row with title, directory, step count, and relative time,
+ * aligned in fixed-width columns matching native Antigravity CLI.
  */
 export function renderSessionRow(
   session: Session,
@@ -105,40 +106,48 @@ export function renderSessionRow(
   const prefix = isSelected ? pc.cyan(pc.bold("> ")) : "  ";
   const prefixLen = 2;
 
-  // Metadata columns on the right
-  const metaParts: string[] = [];
-  if (dirStr && columns >= 75) {
-    metaParts.push(dirStr);
-  }
-  if (stepsStr && columns >= 55) {
-    metaParts.push(stepsStr);
-  }
-  if (timeStr) {
-    metaParts.push(timeStr);
-  }
+  // Determine which metadata columns fit based on terminal width
+  const showDir = Boolean(dirStr && columns >= 75);
+  const showSteps = Boolean(stepsStr && columns >= 55);
+  const showTime = Boolean(timeStr);
 
-  const rawMeta = metaParts.join("   ");
-  const metaWidth = rawMeta ? rawMeta.length : 0;
+  const dirColWidth = showDir ? Math.min(18, Math.max(10, Math.floor(columns * 0.18))) : 0;
+  const stepsColWidth = showSteps ? 12 : 0;
+  const timeColWidth = showTime ? 10 : 0;
 
-  const availableTitleWidth = Math.max(10, columns - prefixLen - metaWidth - 3);
+  // Spacing between columns (2 spaces per column gap)
+  let totalMetaWidth = 0;
+  if (showDir) totalMetaWidth += dirColWidth + 2;
+  if (showSteps) totalMetaWidth += stepsColWidth + 2;
+  if (showTime) totalMetaWidth += timeColWidth;
+
+  const availableTitleWidth = Math.max(10, columns - prefixLen - totalMetaWidth - 2);
   const title = session.title || session.firstPrompt || session.id.slice(0, 8);
   const truncatedTitle = truncateString(title, availableTitleWidth);
 
-  const paddingLen = Math.max(1, columns - prefixLen - truncatedTitle.length - metaWidth - 1);
+  // Remaining space between title and first metadata column
+  const paddingLen = Math.max(2, columns - prefixLen - truncatedTitle.length - totalMetaWidth);
   const padding = " ".repeat(paddingLen);
 
-  const formattedMetaParts: string[] = [];
-  if (dirStr && columns >= 75) {
-    formattedMetaParts.push(pc.dim(dirStr));
-  }
-  if (stepsStr && columns >= 55) {
-    formattedMetaParts.push(pc.dim(stepsStr));
-  }
-  if (timeStr) {
-    formattedMetaParts.push(isSelected ? pc.cyan(timeStr) : pc.dim(timeStr));
+  const metaParts: string[] = [];
+
+  if (showDir) {
+    const truncatedDir = truncateString(dirStr, dirColWidth);
+    const rightAlignedDir = truncatedDir.padStart(dirColWidth, " ");
+    metaParts.push(pc.dim(rightAlignedDir));
   }
 
-  const formattedMeta = formattedMetaParts.join("   ");
+  if (showSteps) {
+    const rightAlignedSteps = stepsStr.padStart(stepsColWidth, " ");
+    metaParts.push(pc.dim(rightAlignedSteps));
+  }
+
+  if (showTime) {
+    const rightAlignedTime = timeStr.padStart(timeColWidth, " ");
+    metaParts.push(isSelected ? pc.cyan(rightAlignedTime) : pc.dim(rightAlignedTime));
+  }
+
+  const formattedMeta = metaParts.join("  ");
 
   if (isSelected) {
     return prefix + pc.bold(pc.white(truncatedTitle)) + padding + formattedMeta;
