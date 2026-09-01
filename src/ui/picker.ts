@@ -35,6 +35,8 @@ export async function runInteractivePicker(options: PickerOptions): Promise<Sess
 
   return new Promise<Session | null>((resolve) => {
     let renderedLineCount = 0;
+    let isCleanedUp = false;
+
     const rl = readline.createInterface({
       input: process.stdin,
       escapeCodeTimeout: 50,
@@ -48,24 +50,63 @@ export async function runInteractivePicker(options: PickerOptions): Promise<Sess
     process.stdout.write("\x1B[?25l");
 
     const cleanup = () => {
+      if (isCleanedUp) return;
+      isCleanedUp = true;
+
       // Clear rendered lines
       if (renderedLineCount > 0) {
         process.stdout.write(`\x1B[${renderedLineCount}A\x1B[0J`);
       }
       // Show cursor
       process.stdout.write("\x1B[?25h");
-      process.stdin.setRawMode?.(false);
-      process.stdin.pause();
+
+      process.stdin.removeListener("keypress", onKeypress);
+      process.stdout.removeListener("resize", onResize);
+      process.removeListener("SIGINT", onSigint);
+      process.removeListener("SIGTERM", onSigterm);
+      process.removeListener("exit", onExit);
+
+      try {
+        process.stdin.setRawMode?.(false);
+        process.stdin.pause();
+      } catch {
+        // Ignore
+      }
       rl.close();
     };
 
+    const onExit = () => {
+      process.stdout.write("\x1B[?25h");
+    };
+
+    const onSigint = () => {
+      cleanup();
+      resolve(null);
+    };
+
+    const onSigterm = () => {
+      cleanup();
+      resolve(null);
+    };
+
+    const onResize = () => {
+      render();
+    };
+
+    process.on("SIGINT", onSigint);
+    process.on("SIGTERM", onSigterm);
+    process.on("exit", onExit);
+    process.stdout.on("resize", onResize);
+
     const render = () => {
+      if (isCleanedUp) return;
+
       // Move up and clear previous render
       if (renderedLineCount > 0) {
         process.stdout.write(`\x1B[${renderedLineCount}A\x1B[0J`);
       }
 
-      const columns = Math.min(process.stdout.columns || 80, 100);
+      const columns = Math.min(process.stdout.columns || 80, 110);
       const lines: string[] = [];
 
       // Header
@@ -126,7 +167,7 @@ export async function runInteractivePicker(options: PickerOptions): Promise<Sess
 
       // Shortcuts footer
       lines.push(
-        pc.dim("  ↑↓ navigate   type search   enter resume   esc quit")
+        pc.dim("  ↑↓ navigate   type search   enter resume   esc quit / clear search")
       );
 
       // Render all lines
@@ -146,8 +187,15 @@ export async function runInteractivePicker(options: PickerOptions): Promise<Sess
       }
 
       if (key.name === "escape") {
-        cleanup();
-        resolve(null);
+        if (query.length > 0) {
+          query = "";
+          filtered = filterSessionsByQuery(sessions, query);
+          selectedIndex = 0;
+          render();
+        } else {
+          cleanup();
+          resolve(null);
+        }
         return;
       }
 
@@ -203,6 +251,28 @@ export async function runInteractivePicker(options: PickerOptions): Promise<Sess
       if (key.name === "end") {
         if (filtered.length > 0) {
           selectedIndex = filtered.length - 1;
+          render();
+        }
+        return;
+      }
+
+      // Ctrl+U: Clear search line
+      if (key.ctrl && key.name === "u") {
+        if (query.length > 0) {
+          query = "";
+          filtered = filterSessionsByQuery(sessions, query);
+          selectedIndex = 0;
+          render();
+        }
+        return;
+      }
+
+      // Ctrl+W: Delete word backward
+      if (key.ctrl && key.name === "w") {
+        if (query.length > 0) {
+          query = query.replace(/\s*\S+\s*$/, "");
+          filtered = filterSessionsByQuery(sessions, query);
+          selectedIndex = 0;
           render();
         }
         return;

@@ -8,6 +8,7 @@ import path from "node:path";
  * 1. CLI explicit flag (--agy-path)
  * 2. Environment variable AGY_RESUME_AGY_PATH
  * 3. System PATH lookup
+ * 4. Standard default installation locations
  */
 export function resolveAntigravityExecutable(customPath?: string): string | null {
   if (customPath && customPath.trim()) {
@@ -49,8 +50,13 @@ export function resolveAntigravityExecutable(customPath?: string): string | null
     }
   }
 
-  // Check common npm global or local bin locations on Windows
+  // Check common installation locations
   if (isWindows) {
+    const localAppData = process.env.LOCALAPPDATA;
+    if (localAppData) {
+      const agyLocal = path.join(localAppData, "agy", "bin", "agy.exe");
+      if (fs.existsSync(agyLocal)) return agyLocal;
+    }
     const appData = process.env.APPDATA;
     if (appData) {
       const npmCandidate = path.join(appData, "npm", "agy.cmd");
@@ -60,6 +66,8 @@ export function resolveAntigravityExecutable(customPath?: string): string | null
     // POSIX fallback check
     const localBin = path.join(os.homedir(), ".local", "bin", "agy");
     if (fs.existsSync(localBin)) return localBin;
+    const agyHomeBin = path.join(os.homedir(), ".agy", "bin", "agy");
+    if (fs.existsSync(agyHomeBin)) return agyHomeBin;
   }
 
   return null;
