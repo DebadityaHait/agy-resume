@@ -1,4 +1,3 @@
-import path from "node:path";
 import pc from "picocolors";
 import type { Session } from "../types.js";
 
@@ -65,7 +64,8 @@ export function formatStepCount(count?: number): string {
 export function extractWorkspaceDir(workspace?: string): string {
   if (!workspace || !workspace.trim()) return "";
   const trimmed = workspace.trim();
-  const base = path.basename(trimmed);
+  const parts = trimmed.split(/[/\\]+/).filter(Boolean);
+  const base = parts.pop();
   if (base && base !== "/" && base !== "\\") {
     return base;
   }
