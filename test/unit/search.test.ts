@@ -120,9 +120,10 @@ describe("search & sort", () => {
   describe("renderSessionRow", () => {
     const fixedNow = new Date("2026-09-01T20:00:00.000Z");
 
-    it("renders row with title, step count, and relative time", () => {
+    it("renders row with title, directory, step count, and relative time", () => {
       const row = renderSessionRow(sampleSessions[0]!, true, 80, fixedNow);
       expect(row).toContain("TickTick Patcher Local Execution");
+      expect(row).toContain("ticktick");
       expect(row).toContain("25 steps");
       expect(row).toContain("45m ago");
     });

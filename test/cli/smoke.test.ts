@@ -42,41 +42,57 @@ describe("package smoke test (npm pack & install)", () => {
       });
       expect(installResult.status).toBe(0);
 
-      // Step 4: Run npx agyr --help
-      const helpResult = crossSpawn.sync("npx", ["agyr", "--help"], {
+      // Binary paths
+      const isWindows = process.platform === "win32";
+      const binDir = path.join(tempDir, "node_modules", ".bin");
+      const agyrBin = path.join(binDir, isWindows ? "agyr.cmd" : "agyr");
+      const agyResumeBin = path.join(binDir, isWindows ? "agy-resume.cmd" : "agy-resume");
+
+      // Ensure execute permissions on POSIX
+      if (!isWindows) {
+        try {
+          fs.chmodSync(agyrBin, 0o755);
+          fs.chmodSync(agyResumeBin, 0o755);
+        } catch {
+          // Ignore
+        }
+      }
+
+      // Step 4: Run agyr --help
+      const helpResult = crossSpawn.sync(agyrBin, ["--help"], {
         cwd: tempDir,
         encoding: "utf-8",
-        shell: true,
+        shell: isWindows,
       });
       expect(helpResult.status).toBe(0);
       expect(helpResult.stdout).toContain("Cross-platform workspace-scoped conversation picker");
 
-      // Step 5: Run npx agy-resume --help
-      const helpResumeResult = crossSpawn.sync("npx", ["agy-resume", "--help"], {
+      // Step 5: Run agy-resume --help
+      const helpResumeResult = crossSpawn.sync(agyResumeBin, ["--help"], {
         cwd: tempDir,
         encoding: "utf-8",
-        shell: true,
+        shell: isWindows,
       });
       expect(helpResumeResult.status).toBe(0);
       expect(helpResumeResult.stdout).toContain("Cross-platform workspace-scoped conversation picker");
 
-      // Step 6: Run npx agyr --version
-      const versionResult = crossSpawn.sync("npx", ["agyr", "--version"], {
+      // Step 6: Run agyr --version
+      const versionResult = crossSpawn.sync(agyrBin, ["--version"], {
         cwd: tempDir,
         encoding: "utf-8",
-        shell: true,
+        shell: isWindows,
       });
       expect(versionResult.status).toBe(0);
       expect(versionResult.stdout.trim()).toBe("0.1.0");
 
-      // Step 7: Run npx agyr --json with fixture data
+      // Step 7: Run agyr --json with fixture data
       const jsonResult = crossSpawn.sync(
-        "npx",
-        ["agyr", "--json", "--data-dir", STANDARD_DATA_DIR, "--cwd", "C:\\Projects\\ticktick"],
+        agyrBin,
+        ["--json", "--data-dir", STANDARD_DATA_DIR, "--cwd", "C:\\Projects\\ticktick"],
         {
           cwd: tempDir,
           encoding: "utf-8",
-          shell: true,
+          shell: isWindows,
         }
       );
       expect(jsonResult.status).toBe(0);

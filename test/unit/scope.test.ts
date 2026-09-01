@@ -1,3 +1,5 @@
+import os from "node:os";
+import path from "node:path";
 import { describe, it, expect } from "vitest";
 import type { Session } from "../../src/types.js";
 import { filterSessionsByScope } from "../../src/paths/scope.js";
@@ -99,9 +101,9 @@ describe("filterSessionsByScope", () => {
 
   describe("repo scope", () => {
     it("throws NotInGitRepositoryError if target directory has no git repo", () => {
-      // D:\non-existent-or-root
+      const nonExistent = path.join(os.tmpdir(), "non-existent-git-dir-9999");
       expect(() =>
-        filterSessionsByScope(sampleSessions, "C:\\FakeNonExistentRepoDir12345", "repo", "win32")
+        filterSessionsByScope(sampleSessions, nonExistent, "repo")
       ).toThrow(NotInGitRepositoryError);
     });
   });

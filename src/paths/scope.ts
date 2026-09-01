@@ -9,7 +9,16 @@ import { NotInGitRepositoryError } from "../utils/errors.js";
  * Works without spawning git process, safe and fast.
  */
 export function findGitRepoRoot(startDir: string): string | null {
-  let current = path.resolve(startDir);
+  if (!startDir || !startDir.trim()) {
+    return null;
+  }
+
+  const resolved = path.resolve(startDir);
+  if (!fs.existsSync(resolved)) {
+    return null;
+  }
+
+  let current = resolved;
   const root = path.parse(current).root;
 
   while (current && current !== root) {
@@ -69,7 +78,7 @@ export function filterSessionsByScope(
   }
 
   if (scope === "repo") {
-    const gitRoot = findGitRepoRoot(normalizedTarget);
+    const gitRoot = findGitRepoRoot(targetWorkspace);
     if (!gitRoot) {
       throw new NotInGitRepositoryError(targetWorkspace);
     }

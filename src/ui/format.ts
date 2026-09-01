@@ -1,3 +1,4 @@
+import path from "node:path";
 import pc from "picocolors";
 import type { Session } from "../types.js";
 
@@ -59,6 +60,19 @@ export function formatStepCount(count?: number): string {
 }
 
 /**
+ * Extracts a compact directory / folder name from a workspace path.
+ */
+export function extractWorkspaceDir(workspace?: string): string {
+  if (!workspace || !workspace.trim()) return "";
+  const trimmed = workspace.trim();
+  const base = path.basename(trimmed);
+  if (base && base !== "/" && base !== "\\") {
+    return base;
+  }
+  return trimmed;
+}
+
+/**
  * Truncates string to maxWidth columns, appending '...' if truncated.
  * Handles Unicode safely.
  */
@@ -75,7 +89,7 @@ export function truncateString(str: string, maxWidth: number): string {
 }
 
 /**
- * Formats an interactive picker row with title, step count, and relative time.
+ * Formats an interactive picker row with title, directory, step count, and relative time.
  */
 export function renderSessionRow(
   session: Session,
@@ -85,12 +99,18 @@ export function renderSessionRow(
 ): string {
   const timeStr = formatRelativeTime(session.updatedAt || session.createdAt, now);
   const stepsStr = formatStepCount(session.messageCount);
+  const dirStr = extractWorkspaceDir(session.workspace);
 
-  // Show steps if terminal width is adequate (>= 50 cols)
-  const showSteps = Boolean(stepsStr && columns >= 50);
+  // Prefix: "> " or "  "
+  const prefix = isSelected ? pc.cyan(pc.bold("> ")) : "  ";
+  const prefixLen = 2;
 
+  // Metadata columns on the right
   const metaParts: string[] = [];
-  if (showSteps) {
+  if (dirStr && columns >= 75) {
+    metaParts.push(dirStr);
+  }
+  if (stepsStr && columns >= 55) {
     metaParts.push(stepsStr);
   }
   if (timeStr) {
@@ -98,32 +118,27 @@ export function renderSessionRow(
   }
 
   const rawMeta = metaParts.join("   ");
-  const metaColWidth = rawMeta ? rawMeta.length + 2 : 0;
+  const metaWidth = rawMeta ? rawMeta.length : 0;
 
-  // Prefix: "> " or "  "
-  const prefix = isSelected ? pc.cyan(pc.bold("> ")) : "  ";
-  const prefixLen = 2;
-
-  const availableTitleWidth = Math.max(10, columns - prefixLen - metaColWidth - 2);
+  const availableTitleWidth = Math.max(10, columns - prefixLen - metaWidth - 3);
   const title = session.title || session.firstPrompt || session.id.slice(0, 8);
   const truncatedTitle = truncateString(title, availableTitleWidth);
 
-  // Pad title so metadata aligns nicely to the right
-  const paddingLen = Math.max(1, columns - prefixLen - truncatedTitle.length - rawMeta.length - 2);
+  const paddingLen = Math.max(1, columns - prefixLen - truncatedTitle.length - metaWidth - 1);
   const padding = " ".repeat(paddingLen);
 
-  let formattedMeta = "";
-  if (showSteps && timeStr) {
-    if (isSelected) {
-      formattedMeta = `${pc.dim(stepsStr)}   ${pc.cyan(timeStr)}`;
-    } else {
-      formattedMeta = `${pc.dim(stepsStr)}   ${pc.dim(timeStr)}`;
-    }
-  } else if (showSteps) {
-    formattedMeta = isSelected ? pc.cyan(stepsStr) : pc.dim(stepsStr);
-  } else if (timeStr) {
-    formattedMeta = isSelected ? pc.cyan(timeStr) : pc.dim(timeStr);
+  const formattedMetaParts: string[] = [];
+  if (dirStr && columns >= 75) {
+    formattedMetaParts.push(pc.dim(dirStr));
   }
+  if (stepsStr && columns >= 55) {
+    formattedMetaParts.push(pc.dim(stepsStr));
+  }
+  if (timeStr) {
+    formattedMetaParts.push(isSelected ? pc.cyan(timeStr) : pc.dim(timeStr));
+  }
+
+  const formattedMeta = formattedMetaParts.join("   ");
 
   if (isSelected) {
     return prefix + pc.bold(pc.white(truncatedTitle)) + padding + formattedMeta;

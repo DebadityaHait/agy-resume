@@ -39,7 +39,9 @@ export function normalizeWorkspacePath(
     }
   }
 
-  if (platform === "win32") {
+  const isWindowsPath = /^[a-zA-Z]:/.test(raw) || raw.startsWith("\\\\");
+
+  if (platform === "win32" || isWindowsPath) {
     return normalizeWindowsPath(raw, options.resolveRealpath ?? false);
   } else {
     return normalizePosixPath(raw, options.resolveRealpath ?? false);
@@ -128,7 +130,10 @@ export function areWorkspacesEqual(
   const normA = normalizeWorkspacePath(pathA, { platform });
   const normB = normalizeWorkspacePath(pathB, { platform });
 
-  if (platform === "win32") {
+  const isWindowsA = /^[a-zA-Z]:/.test(normA) || normA.startsWith("\\\\");
+  const isWindowsB = /^[a-zA-Z]:/.test(normB) || normB.startsWith("\\\\");
+
+  if (platform === "win32" || isWindowsA || isWindowsB) {
     return normA.toLowerCase() === normB.toLowerCase();
   }
 
@@ -149,8 +154,10 @@ export function isSubdirectoryOf(
   const normParent = normalizeWorkspacePath(parentPath, { platform });
   const normChild = normalizeWorkspacePath(childPath, { platform });
 
-  if (platform === "win32") {
-    // If drives differ, cannot be subdirectory
+  const isWindowsParent = /^[a-zA-Z]:/.test(normParent) || normParent.startsWith("\\\\");
+  const isWindowsChild = /^[a-zA-Z]:/.test(normChild) || normChild.startsWith("\\\\");
+
+  if (platform === "win32" || isWindowsParent || isWindowsChild) {
     const parentDrive = /^[a-zA-Z]:/.test(normParent) ? normParent.slice(0, 2).toUpperCase() : "";
     const childDrive = /^[a-zA-Z]:/.test(normChild) ? normChild.slice(0, 2).toUpperCase() : "";
     if (parentDrive && childDrive && parentDrive !== childDrive) {

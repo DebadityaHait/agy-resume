@@ -2,7 +2,7 @@
 
 > **Cross-Platform Workspace-Scoped Conversation Picker for Google Antigravity CLI**
 
-[![CI](https://github.com/example/agy-resume/actions/workflows/ci.yml/badge.svg)](https://github.com/example/agy-resume/actions/workflows/ci.yml)
+[![CI](https://github.com/DebadityaHait/agy-resume/actions/workflows/ci.yml/badge.svg)](https://github.com/DebadityaHait/agy-resume/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Node.js](https://img.shields.io/badge/Node.js-22%2B-green.svg)](https://nodejs.org/)
 
@@ -37,10 +37,10 @@ With **`agyr`**, you get immediate, directory-scoped session discovery:
 
   Search: _
 
-> Implement Authentication Service       25 steps   3m ago
-  Check OAuth Token Refresh              12 steps  16m ago
-  Fix JWT signature verification          5 steps   2d ago
-  Add unit test coverage                  8 steps   5d ago
+> Implement Authentication Service       auth-service    25 steps   3m ago
+  Check OAuth Token Refresh              auth-service    12 steps  16m ago
+  Fix JWT signature verification          auth-service     5 steps   2d ago
+  Add unit test coverage                  auth-service     8 steps   5d ago
 
   4 conversations
 
