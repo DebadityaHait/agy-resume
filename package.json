@@ -11,7 +11,7 @@
     "workspace",
     "developer-tools"
   ],
-  "author": "Antigravity Community",
+  "author": "Debaditya Hait",
   "license": "MIT",
   "type": "module",
   "main": "./dist/index.js",
@@ -26,6 +26,17 @@
     "LICENSE",
     "CHANGELOG.md"
   ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/DebadityaHait/agy-resume.git"
+  },
+  "bugs": {
+    "url": "https://github.com/DebadityaHait/agy-resume/issues"
+  },
+  "homepage": "https://github.com/DebadityaHait/agy-resume#readme",
+  "publishConfig": {
+    "access": "public"
+  },
   "engines": {
     "node": ">=22.0.0"
   },
