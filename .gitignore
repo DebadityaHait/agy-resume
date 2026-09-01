@@ -1,0 +1,11 @@
+node_modules/
+dist/
+*.tgz
+.coverage/
+coverage/
+.DS_Store
+*.log
+.cache/
+.vitest/
+PRD*.md
+PRD — agy-resume.md

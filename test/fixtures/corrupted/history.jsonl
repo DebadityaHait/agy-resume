@@ -1,0 +1,6 @@
+{"display":"Valid line 1","timestamp":1788000000000,"workspace":"C:\\Projects\\valid","conversationId":"conv-valid-1"}
+{ INVALID JSON LINE HERE
+{"display":"Valid line 2","timestamp":1788000001000,"workspace":"C:\\Projects\\valid","conversationId":"conv-valid-2"}
+
+{"display":"Valid line 3","timestamp":1788000002000,"workspace":"C:\\Projects\\valid","conversationId":"conv-valid-3"}
+{"truncated_end": true

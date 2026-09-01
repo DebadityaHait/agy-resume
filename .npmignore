@@ -1,0 +1,9 @@
+.github/
+test/
+src/
+tsconfig.json
+tsup.config.ts
+vitest.config.ts
+.gitignore
+.npmignore
+PRD — agy-resume.md
