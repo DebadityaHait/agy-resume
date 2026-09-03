@@ -11,7 +11,7 @@ const STANDARD_DATA_DIR = path.join(FIXTURES_DIR, "standard");
 describe("package smoke test (npm pack & install)", () => {
   it("installs packed tarball and executes binaries successfully", () => {
     // Step 1: Run npm pack
-    const packResult = crossSpawn.sync("npm", ["pack"], {
+    const packResult = crossSpawn.sync("npm", ["pack", "--ignore-scripts"], {
       cwd: ROOT_DIR,
       encoding: "utf-8",
       shell: true,

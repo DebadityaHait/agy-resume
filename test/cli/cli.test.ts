@@ -211,8 +211,32 @@ describe("CLI commands", () => {
     expect(res.stderr).toContain("Multiple conversations found");
   });
 
+  it("forwards unknown flags directly as passthrough args even without -- (PowerShell compatibility)", () => {
+    const res = runCli([
+      "patcher requirements",
+      "--no-launch",
+      "--data-dir",
+      STANDARD_DATA_DIR,
+      "--cwd",
+      "C:\\Projects\\ticktick",
+      "--dangerously-skip-permissions",
+    ]);
+
+    expect(res.status).toBe(0);
+    expect(res.stdout).toContain("Selected conversation:");
+    expect(res.stdout).toContain("conv-ticktick-1");
+    expect(res.stdout).toContain("Extra flags: --dangerously-skip-permissions");
+  });
+
+  it("suggests closest agyr option on typos", () => {
+    const res = runCli(["--scpoe", "repo"]);
+    expect(res.status).not.toBe(0);
+    expect(res.stderr).toContain('Unknown option "--scpoe". Did you mean "--scope"?');
+  });
+
   it("exports main function which can be imported safely without auto-executing", async () => {
     const mod = await import("../../src/cli.js");
     expect(typeof mod.main).toBe("function");
   });
 });
+

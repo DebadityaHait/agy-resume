@@ -104,10 +104,15 @@ agyr auth token
 
 ### Argument Passthrough (`--`)
 
-You can pass extra flags and arguments directly to the underlying `agy` process by placing them after `--`. For example, to resume a session while bypassing permission prompts:
+You can pass extra flags and arguments directly to the underlying `agy` process by placing them after `--` (or directly on the command line). For example, to resume a session while bypassing permission prompts:
 
 ```bash
-agyr auth token -- --dangerously-skip-permissions
+agyr -- --dangerously-skip-permissions
+```
+or directly:
+```bash
+agyr --dangerously-skip-permissions
+agyr auth token --dangerously-skip-permissions
 ```
 
 When selected, `agyr` will execute:
@@ -116,8 +121,11 @@ When selected, `agyr` will execute:
 agy --conversation <selected-id> --dangerously-skip-permissions
 ```
 
+> [!TIP]
+> In **Windows PowerShell**, PowerShell's parser automatically strips bare `--` delimiters before passing arguments to scripts. `agyr` handles this automatically by detecting unrecognized flags and forwarding them cleanly to `agy`.
+
 > [!NOTE]
-> `agyr` automatically manages the conversation ID. Passing `--conversation` or `-c` after `--` is rejected.
+> `agyr` automatically manages the conversation ID. Passing `--conversation` or `-c` as a passthrough flag is rejected.
 
 To preview the selected conversation and the extra flags that would be forwarded without launching `agy`, use `--no-launch`:
 
