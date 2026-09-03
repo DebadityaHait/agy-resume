@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2026-09-04
+
+### Added
+- Explicit `--agy` argument passthrough boundary: `agyr [options] [query...] --agy [agy arguments...]`.
+- Secondary interactive launch action: press <kbd>Tab</kbd> on any conversation to open the `Agy arguments:` prompt and enter downstream arguments.
+- Robust interactive argument tokenizer preserving literal Windows backslashes in file paths while supporting single and double quotes for grouped arguments with spaces.
+- Safety check preventing `--conversation` from being passed through `--agy` (preserving `agyr` conversation ownership).
+- Previewing of forwarded extra flags in `--no-launch` mode.
+
+### Changed
+- Simplified selector footer to `↑↓ navigate   Enter resume   Tab arguments   Esc cancel`.
+- Preserved lowercase `a` and uppercase `A` exclusively for case-insensitive conversation search.
+
 ## [0.1.0] - 2026-09-02
 
 ### Added

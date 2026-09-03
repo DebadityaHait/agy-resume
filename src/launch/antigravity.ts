@@ -1,7 +1,8 @@
 import fs from "node:fs";
 import crossSpawn from "cross-spawn";
 import { resolveAntigravityExecutable } from "./which.js";
-import { AntigravityExecutableNotFoundError, InvalidArgumentError } from "../utils/errors.js";
+import { AntigravityExecutableNotFoundError } from "../utils/errors.js";
+import { validateAgyArgs } from "./arguments.js";
 import { logger } from "../utils/logger.js";
 
 export interface LaunchOptions {
@@ -25,18 +26,7 @@ export async function launchAntigravity(
   }
 
   const extraArgs = options.args ?? [];
-  const hasConversationArg = extraArgs.some(
-    (arg) =>
-      arg === "--conversation" ||
-      arg.startsWith("--conversation=") ||
-      arg === "-c" ||
-      arg.startsWith("-c=")
-  );
-  if (hasConversationArg) {
-    throw new InvalidArgumentError(
-      "Cannot pass --conversation or -c in args. agy-resume manages the conversation ID."
-    );
-  }
+  validateAgyArgs(extraArgs);
 
   const spawnCwd = fs.existsSync(options.cwd) ? options.cwd : process.cwd();
   const args = ["--conversation", conversationId, ...extraArgs];

@@ -2,7 +2,8 @@ import readline from "node:readline";
 import pc from "picocolors";
 import type { Session } from "../types.js";
 import { filterSessionsByQuery } from "../discovery/search.js";
-import { renderSessionRow } from "./format.js";
+import { parseInteractiveAgyArgs, validateAgyArgs } from "../launch/arguments.js";
+import { renderSessionRow, truncateString } from "./format.js";
 
 export interface PickerOptions {
   sessions: Session[];
@@ -10,44 +11,66 @@ export interface PickerOptions {
   initialQuery?: string | undefined;
   maxVisibleItems?: number | undefined;
   columns?: number | undefined;
+  input?: NodeJS.ReadableStream | undefined;
+  output?: NodeJS.WritableStream | undefined;
+}
+
+export interface PickerResult {
+  session: Session;
+  agyArgs?: string[] | undefined;
 }
 
 /**
  * Runs the interactive conversation picker TUI.
- * Returns the selected Session, or null if cancelled (Esc or Ctrl+C).
+ * Returns the selected Session with optional agy arguments,
+ * or null if cancelled (Esc or Ctrl+C).
  */
-export async function runInteractivePicker(options: PickerOptions): Promise<Session | null> {
+export async function runInteractivePicker(
+  options: PickerOptions
+): Promise<PickerResult | null> {
   const { sessions, targetWorkspace } = options;
   let query = options.initialQuery || "";
   let selectedIndex = 0;
   const maxVisible = options.maxVisibleItems || 12;
 
+  let mode: "select" | "prompt-arguments" = "select";
+  let argumentInput = "";
+
   // Filter initially
   let filtered = filterSessionsByQuery(sessions, query);
 
+  const input = options.input || process.stdin;
+  const output = options.output || process.stdout;
+
   // Setup terminal
-  const isRawSupported = Boolean(process.stdin.setRawMode);
-  if (!isRawSupported || !process.stdin.isTTY) {
-    throw new Error(
-      "Interactive picker requires a TTY terminal. Use --json to list conversations in non-interactive scripts."
-    );
+  if (!options.input) {
+    const isRawSupported = Boolean((process.stdin as any).setRawMode);
+    if (!isRawSupported || !process.stdin.isTTY) {
+      throw new Error(
+        "Interactive picker requires a TTY terminal. Use --json to list conversations in non-interactive scripts."
+      );
+    }
   }
 
-  return new Promise<Session | null>((resolve) => {
+  return new Promise<PickerResult | null>((resolve, reject) => {
     let renderedLineCount = 0;
     let isCleanedUp = false;
 
     const rl = readline.createInterface({
-      input: process.stdin,
+      input,
       escapeCodeTimeout: 50,
     });
-    readline.emitKeypressEvents(process.stdin, rl);
+    readline.emitKeypressEvents(input, rl);
 
-    process.stdin.setRawMode?.(true);
-    process.stdin.resume();
+    if (typeof (input as any).setRawMode === "function") {
+      (input as any).setRawMode(true);
+    }
+    if (typeof (input as any).resume === "function") {
+      (input as any).resume();
+    }
 
     // Hide cursor
-    process.stdout.write("\x1B[?25l");
+    output.write("\x1B[?25l");
 
     const cleanup = () => {
       if (isCleanedUp) return;
@@ -55,20 +78,26 @@ export async function runInteractivePicker(options: PickerOptions): Promise<Sess
 
       // Clear rendered lines
       if (renderedLineCount > 0) {
-        process.stdout.write(`\x1B[${renderedLineCount}A\x1B[0J`);
+        output.write(`\x1B[${renderedLineCount}A\x1B[0J`);
       }
       // Show cursor
-      process.stdout.write("\x1B[?25h");
+      output.write("\x1B[?25h");
 
-      process.stdin.removeListener("keypress", onKeypress);
-      process.stdout.removeListener("resize", onResize);
+      input.removeListener("keypress", onKeypress);
+      if (!options.output) {
+        process.stdout.removeListener("resize", onResize);
+      }
       process.removeListener("SIGINT", onSigint);
       process.removeListener("SIGTERM", onSigterm);
       process.removeListener("exit", onExit);
 
       try {
-        process.stdin.setRawMode?.(false);
-        process.stdin.pause();
+        if (typeof (input as any).setRawMode === "function") {
+          (input as any).setRawMode(false);
+        }
+        if (typeof (input as any).pause === "function") {
+          (input as any).pause();
+        }
       } catch {
         // Ignore
       }
@@ -76,7 +105,7 @@ export async function runInteractivePicker(options: PickerOptions): Promise<Sess
     };
 
     const onExit = () => {
-      process.stdout.write("\x1B[?25h");
+      output.write("\x1B[?25h");
     };
 
     const onSigint = () => {
@@ -96,18 +125,56 @@ export async function runInteractivePicker(options: PickerOptions): Promise<Sess
     process.on("SIGINT", onSigint);
     process.on("SIGTERM", onSigterm);
     process.on("exit", onExit);
-    process.stdout.on("resize", onResize);
+    if (!options.output) {
+      process.stdout.on("resize", onResize);
+    }
 
     const render = () => {
       if (isCleanedUp) return;
 
       // Move up and clear previous render
       if (renderedLineCount > 0) {
-        process.stdout.write(`\x1B[${renderedLineCount}A\x1B[0J`);
+        output.write(`\x1B[${renderedLineCount}A\x1B[0J`);
       }
 
-      const columns = Math.min(process.stdout.columns || 80, 110);
+      const columns = Math.min(
+        (output as any).columns || process.stdout.columns || 80,
+        110
+      );
       const lines: string[] = [];
+
+      if (mode === "prompt-arguments") {
+        const chosen = filtered[selectedIndex]!;
+        lines.push(pc.bold(pc.cyan("  Antigravity Sessions")));
+        lines.push(
+          pc.dim(`  ${truncateString(targetWorkspace, Math.max(10, columns - 4))}`)
+        );
+        lines.push("");
+
+        const idSuffix = ` (${chosen.id})`;
+        const maxTitleWidth = Math.max(10, columns - 14 - idSuffix.length);
+        const titleText = truncateString(
+          chosen.title || "(no title)",
+          maxTitleWidth
+        );
+        lines.push(`  Selected: ${pc.bold(titleText)} ${pc.dim(idSuffix)}`);
+        lines.push("");
+
+        lines.push(pc.bold("  Agy arguments:"));
+        const maxInputWidth = Math.max(10, columns - 8);
+        const displayInput =
+          argumentInput.length > maxInputWidth
+            ? argumentInput.slice(argumentInput.length - maxInputWidth)
+            : argumentInput;
+        lines.push(`  > ${pc.cyan(displayInput)}${pc.dim("_")}`);
+        lines.push("");
+        lines.push(pc.dim("  Enter confirm   Esc cancel"));
+
+        const renderedText = lines.join("\n") + "\n";
+        output.write(renderedText);
+        renderedLineCount = lines.length;
+        return;
+      }
 
       // Header
       lines.push(pc.bold(pc.cyan("  Antigravity Sessions")));
@@ -130,7 +197,13 @@ export async function runInteractivePicker(options: PickerOptions): Promise<Sess
 
         let startIdx = 0;
         if (filtered.length > maxVisible) {
-          startIdx = Math.max(0, Math.min(selectedIndex - Math.floor(maxVisible / 2), filtered.length - maxVisible));
+          startIdx = Math.max(
+            0,
+            Math.min(
+              selectedIndex - Math.floor(maxVisible / 2),
+              filtered.length - maxVisible
+            )
+          );
         }
         const endIdx = Math.min(startIdx + maxVisible, filtered.length);
 
@@ -167,12 +240,12 @@ export async function runInteractivePicker(options: PickerOptions): Promise<Sess
 
       // Shortcuts footer
       lines.push(
-        pc.dim("  ↑↓ navigate   type search   enter resume   esc quit / clear search")
+        pc.dim("  ↑↓ navigate   Enter resume   Tab arguments   Esc cancel")
       );
 
       // Render all lines
-      const output = lines.join("\n") + "\n";
-      process.stdout.write(output);
+      const renderedText = lines.join("\n") + "\n";
+      output.write(renderedText);
       renderedLineCount = lines.length;
     };
 
@@ -186,6 +259,65 @@ export async function runInteractivePicker(options: PickerOptions): Promise<Sess
         return;
       }
 
+      if (mode === "prompt-arguments") {
+        if (key.name === "escape") {
+          mode = "select";
+          argumentInput = "";
+          render();
+          return;
+        }
+
+        if (key.name === "return" || key.name === "enter") {
+          const chosen = filtered[selectedIndex]!;
+          try {
+            const agyArgs = parseInteractiveAgyArgs(argumentInput);
+            validateAgyArgs(agyArgs);
+            cleanup();
+            resolve({ session: chosen, agyArgs });
+          } catch (err) {
+            cleanup();
+            reject(err);
+          }
+          return;
+        }
+
+        if (key.name === "backspace") {
+          if (argumentInput.length > 0) {
+            argumentInput = argumentInput.slice(0, -1);
+            render();
+          }
+          return;
+        }
+
+        if (key.ctrl && key.name === "u") {
+          if (argumentInput.length > 0) {
+            argumentInput = "";
+            render();
+          }
+          return;
+        }
+
+        if (key.ctrl && key.name === "w") {
+          if (argumentInput.length > 0) {
+            argumentInput = argumentInput.replace(/\s*\S+\s*$/, "");
+            render();
+          }
+          return;
+        }
+
+        if (key.sequence && key.sequence.length === 1 && !key.ctrl && !key.meta) {
+          const char = key.sequence;
+          if (char >= " " && char <= "~") {
+            argumentInput += char;
+            render();
+            return;
+          }
+        }
+
+        return;
+      }
+
+      // mode === "select"
       if (key.name === "escape") {
         if (query.length > 0) {
           query = "";
@@ -203,7 +335,17 @@ export async function runInteractivePicker(options: PickerOptions): Promise<Sess
         if (filtered.length > 0 && filtered[selectedIndex]) {
           const chosen = filtered[selectedIndex]!;
           cleanup();
-          resolve(chosen);
+          resolve({ session: chosen });
+        }
+        return;
+      }
+
+      // Tab keypress -> resume with arguments prompt
+      if (key.name === "tab") {
+        if (filtered.length > 0 && filtered[selectedIndex]) {
+          mode = "prompt-arguments";
+          argumentInput = "";
+          render();
         }
         return;
       }
@@ -301,7 +443,7 @@ export async function runInteractivePicker(options: PickerOptions): Promise<Sess
       }
     };
 
-    process.stdin.on("keypress", onKeypress);
+    input.on("keypress", onKeypress);
 
     // Initial render
     render();

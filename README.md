@@ -50,13 +50,21 @@ With **`agyr`**, you get immediate, directory-scoped session discovery:
 
   4 conversations
 
-  ↑↓ navigate   type search   enter resume   esc quit
+  ↑↓ navigate   Enter resume   Tab arguments   Esc cancel
 ```
 
-Select a conversation, press <kbd>Enter</kbd>, and `agyr` immediately resumes your session in Antigravity:
+Select a conversation and press <kbd>Enter</kbd> to immediately resume your session in Antigravity:
 
 ```bash
 agy --conversation <conversation-id>
+```
+
+Or press <kbd>Tab</kbd> to resume with additional arguments:
+
+```text
+Enter   Resume
+Tab     Arguments
+Esc     Cancel
 ```
 
 ---
@@ -102,35 +110,30 @@ Pass keywords directly to start with a pre-filtered list:
 agyr auth token
 ```
 
-### Argument Passthrough (`--`)
+### Argument Passthrough (`--agy`)
 
-You can pass extra flags and arguments directly to the underlying `agy` process by placing them after `--` (or directly on the command line). For example, to resume a session while bypassing permission prompts:
+Arguments after `--agy` are passed directly to `agy`:
 
 ```bash
-agyr -- --dangerously-skip-permissions
+agyr "search query" --agy --dangerously-skip-permissions
 ```
-or directly:
 ```bash
-agyr --dangerously-skip-permissions
-agyr auth token --dangerously-skip-permissions
+agyr "search query" --agy --model flash --dangerously-skip-permissions
 ```
 
 When selected, `agyr` will execute:
 
 ```bash
-agy --conversation <selected-id> --dangerously-skip-permissions
+agy --conversation <selected-id> --model flash --dangerously-skip-permissions
 ```
 
-> [!TIP]
-> In **Windows PowerShell**, PowerShell's parser automatically strips bare `--` delimiters before passing arguments to scripts. `agyr` handles this automatically by detecting unrecognized flags and forwarding them cleanly to `agy`.
-
 > [!NOTE]
-> `agyr` automatically manages the conversation ID. Passing `--conversation` or `-c` as a passthrough flag is rejected.
+> `agyr` automatically manages the conversation ID. Passing `--conversation` through `--agy` is rejected.
 
 To preview the selected conversation and the extra flags that would be forwarded without launching `agy`, use `--no-launch`:
 
 ```bash
-agyr "auth token" --no-launch -- --dangerously-skip-permissions
+agyr "auth token" --no-launch --agy --dangerously-skip-permissions
 ```
 
 ---
@@ -138,30 +141,29 @@ agyr "auth token" --no-launch -- --dangerously-skip-permissions
 ## 🎛️ CLI Options & Scoping Modes
 
 ```text
-Usage: agyr [options] [query...] [-- <agy args...>]
+Usage: agyr [options] [query...] [--agy <agy arguments...>]
 
 Cross-platform workspace-scoped conversation picker for Google Antigravity CLI
 
 Arguments:
-  query                   initial search query terms
-  -- <agy args...>        arguments forwarded directly to Antigravity CLI
+  query                initial search query terms
 
 Options:
-  -v, --version           output the current version
-  -a, --all               show sessions from all workspaces
-  -s, --scope <scope>     scoping mode: exact (default), repo, tree, all
-  --cwd <path>            evaluate workspace scope from specific directory
-  --json                  output session list as JSON
-  --print-id              output only conversation ID without launching
-  --no-launch             display selected session metadata without launching
-  --refresh               force metadata cache refresh
-  --no-cache              bypass reading and writing local cache
-  --data-dir <path>       custom Antigravity data directory
-  --agy-path <path>       custom path to Antigravity CLI executable
-  --limit <number>        limit number of sessions returned
-  --doctor                run diagnostic checks and exit
-  --debug                 enable diagnostic debug logging
-  -h, --help              display help for command
+  -v, --version        output the current version
+  -a, --all            show sessions from all workspaces
+  -s, --scope <scope>  scoping mode (exact, repo, tree, all) (default: "exact")
+  --cwd <path>         evaluate workspace scope from specific directory
+  --json               output session list as JSON
+  --print-id           output only conversation ID without launching
+  --no-launch          display selected session metadata without launching
+  --refresh            force metadata cache refresh
+  --no-cache           bypass reading and writing local cache
+  --data-dir <path>    custom Antigravity data directory
+  --agy-path <path>    custom path to Antigravity CLI executable
+  --limit <number>     limit number of sessions returned
+  --doctor             run diagnostic checks and exit
+  --debug              enable diagnostic debug logging
+  -h, --help           display help for command
 ```
 
 ### Scoping Modes

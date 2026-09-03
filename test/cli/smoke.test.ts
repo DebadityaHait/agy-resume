@@ -9,7 +9,9 @@ const FIXTURES_DIR = path.resolve(import.meta.dirname, "../fixtures");
 const STANDARD_DATA_DIR = path.join(FIXTURES_DIR, "standard");
 
 describe("package smoke test (npm pack & install)", () => {
-  it("installs packed tarball and executes binaries successfully", () => {
+  it(
+    "installs packed tarball and executes binaries successfully",
+    () => {
     // Step 1: Run npm pack
     const packResult = crossSpawn.sync("npm", ["pack", "--ignore-scripts"], {
       cwd: ROOT_DIR,
@@ -35,11 +37,15 @@ describe("package smoke test (npm pack & install)", () => {
         "utf-8"
       );
 
-      const installResult = crossSpawn.sync("npm", ["install", tarballPath], {
-        cwd: tempDir,
-        encoding: "utf-8",
-        shell: true,
-      });
+      const installResult = crossSpawn.sync(
+        "npm",
+        ["install", "--no-audit", "--no-fund", tarballPath],
+        {
+          cwd: tempDir,
+          encoding: "utf-8",
+          shell: true,
+        }
+      );
       expect(installResult.status).toBe(0);
 
       // Binary paths
@@ -60,7 +66,7 @@ describe("package smoke test (npm pack & install)", () => {
         encoding: "utf-8",
       });
       expect(versionResult.status).toBe(0);
-      expect(versionResult.stdout.trim()).toBe("0.1.0");
+      expect(versionResult.stdout.trim()).toBe("0.2.0");
 
       // Step 6: Run CLI --json with fixture data
       const jsonResult = crossSpawn.sync(
@@ -85,5 +91,7 @@ describe("package smoke test (npm pack & install)", () => {
         // Ignore cleanup error
       }
     }
-  });
+  },
+    90000
+  );
 });

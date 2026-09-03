@@ -9,9 +9,10 @@ import { discoverSessions } from "./discovery/discover.js";
 import { runDoctor, printDoctorReport } from "./commands/doctor.js";
 import { runInteractivePicker } from "./ui/picker.js";
 import { launchAntigravity } from "./launch/antigravity.js";
+import { splitAgyArgs, validateAgyArgs } from "./launch/arguments.js";
 import { normalizeWorkspacePath } from "./paths/normalize.js";
 
-const PACKAGE_VERSION = "0.1.0";
+const PACKAGE_VERSION = "0.2.0";
 
 function printSelectedSession(
   session: Session,
@@ -36,149 +37,6 @@ function printSelectedSession(
   console.log("");
 }
 
-const KNOWN_AGYR_OPTIONS = new Set([
-  "-v",
-  "--version",
-  "-a",
-  "--all",
-  "-s",
-  "--scope",
-  "--cwd",
-  "--json",
-  "--print-id",
-  "--no-launch",
-  "--refresh",
-  "--no-cache",
-  "--data-dir",
-  "--agy-path",
-  "--limit",
-  "--doctor",
-  "--debug",
-  "-h",
-  "--help",
-]);
-
-const KNOWN_AGYR_VALUE_OPTIONS = new Set([
-  "-s",
-  "--scope",
-  "--cwd",
-  "--data-dir",
-  "--agy-path",
-  "--limit",
-]);
-
-const AGYR_OPTION_NAMES = [
-  "version",
-  "all",
-  "scope",
-  "cwd",
-  "json",
-  "print-id",
-  "no-launch",
-  "refresh",
-  "no-cache",
-  "data-dir",
-  "agy-path",
-  "limit",
-  "doctor",
-  "debug",
-  "help",
-];
-
-function levenshtein(a: string, b: string): number {
-  const m = a.length;
-  const n = b.length;
-  const d: number[][] = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0));
-  for (let i = 0; i <= m; i++) d[i]![0] = i;
-  for (let j = 0; j <= n; j++) d[0]![j] = j;
-  for (let i = 1; i <= m; i++) {
-    for (let j = 1; j <= n; j++) {
-      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
-      d[i]![j] = Math.min(
-        d[i - 1]![j]! + 1,
-        d[i]![j - 1]! + 1,
-        d[i - 1]![j - 1]! + cost
-      );
-    }
-  }
-  return d[m]![n]!;
-}
-
-function findClosestAgyrOption(name: string): string | null {
-  let minDistance = Infinity;
-  let closest: string | null = null;
-  for (const opt of AGYR_OPTION_NAMES) {
-    const dist = levenshtein(name, opt);
-    if (dist < minDistance) {
-      minDistance = dist;
-      closest = opt;
-    }
-  }
-  return minDistance <= 2 ? closest : null;
-}
-
-function splitPassthroughArgs(userArgs: string[]): {
-  commanderArgs: string[];
-  passthroughArgs: string[];
-} {
-  const doubleDashIndex = userArgs.indexOf("--");
-  if (doubleDashIndex !== -1) {
-    return {
-      commanderArgs: userArgs.slice(0, doubleDashIndex),
-      passthroughArgs: userArgs.slice(doubleDashIndex + 1),
-    };
-  }
-
-  // If no explicit '--' is present (e.g. PowerShell stripped '--', or user passed flags directly),
-  // separate known agyr options from unrecognized flags (which are forwarded to agy).
-  const commanderArgs: string[] = [];
-  const passthroughArgs: string[] = [];
-  let inPassthrough = false;
-
-  for (let i = 0; i < userArgs.length; i++) {
-    const arg = userArgs[i]!;
-
-    if (inPassthrough) {
-      passthroughArgs.push(arg);
-      continue;
-    }
-
-    if (arg.startsWith("-")) {
-      const optionName = arg.includes("=") ? arg.slice(0, arg.indexOf("=")) : arg;
-
-      if (KNOWN_AGYR_OPTIONS.has(optionName)) {
-        commanderArgs.push(arg);
-        if (
-          KNOWN_AGYR_VALUE_OPTIONS.has(optionName) &&
-          !arg.includes("=") &&
-          i + 1 < userArgs.length &&
-          !userArgs[i + 1]!.startsWith("-")
-        ) {
-          i++;
-          commanderArgs.push(userArgs[i]!);
-        }
-      } else {
-        // Check if it's an accidental typo of an agyr option
-        const strippedName = optionName.replace(/^-+/, "");
-        const closest = findClosestAgyrOption(strippedName);
-        if (closest) {
-          throw new InvalidArgumentError(
-            `Unknown option "${arg}". Did you mean "--${closest}"?`
-          );
-        }
-
-        // It is an agy passthrough flag (e.g. --dangerously-skip-permissions)
-        inPassthrough = true;
-        passthroughArgs.push(arg);
-      }
-    } else {
-      commanderArgs.push(arg);
-    }
-  }
-
-  return { commanderArgs, passthroughArgs };
-}
-
 export async function main(argv: string[] = process.argv): Promise<number> {
   let userArgs: string[];
   if (
@@ -192,14 +50,14 @@ export async function main(argv: string[] = process.argv): Promise<number> {
     userArgs = argv;
   }
 
-  const { commanderArgs, passthroughArgs } = splitPassthroughArgs(userArgs);
+  const { agyrArgs, agyArgs: cliAgyArgs } = splitAgyArgs(userArgs);
 
   const program = new Command();
 
   program
     .name("agyr")
     .description("Cross-platform workspace-scoped conversation picker for Google Antigravity CLI")
-    .usage("[options] [query...] [-- <agy args...>]")
+    .usage("[options] [query...] [--agy <agy arguments...>]")
     .version(PACKAGE_VERSION, "-v, --version", "output the current version")
     .argument("[query...]", "initial search query terms")
     .option("-a, --all", "show sessions from all workspaces")
@@ -217,20 +75,9 @@ export async function main(argv: string[] = process.argv): Promise<number> {
     .option("--debug", "enable diagnostic debug logging")
     .helpOption("-h, --help", "display help for command");
 
-  program.parse(commanderArgs, { from: "user" });
+  program.parse(agyrArgs, { from: "user" });
 
-  const hasConversationArg = passthroughArgs.some(
-    (arg) =>
-      arg === "--conversation" ||
-      arg.startsWith("--conversation=") ||
-      arg === "-c" ||
-      arg.startsWith("-c=")
-  );
-  if (hasConversationArg) {
-    throw new InvalidArgumentError(
-      "Cannot pass --conversation or -c after -- because agy-resume manages the conversation ID."
-    );
-  }
+  validateAgyArgs(cliAgyArgs);
 
   const opts = program.opts();
   const queryArgs = program.args;
@@ -327,7 +174,7 @@ export async function main(argv: string[] = process.argv): Promise<number> {
 
     if (opts.launch === false) {
       if (discovery.sessions.length === 1) {
-        printSelectedSession(discovery.sessions[0]!, passthroughArgs);
+        printSelectedSession(discovery.sessions[0]!, cliAgyArgs);
         return ExitCode.SUCCESS;
       }
       logger.error(
@@ -342,7 +189,7 @@ export async function main(argv: string[] = process.argv): Promise<number> {
       return await launchAntigravity(selected.id, {
         cwd: launchWorkspace,
         executablePath: opts.agyPath as string | undefined,
-        args: passthroughArgs,
+        args: cliAgyArgs,
       });
     }
 
@@ -353,16 +200,20 @@ export async function main(argv: string[] = process.argv): Promise<number> {
   }
 
   // 6. Interactive Picker
-  const selected = await runInteractivePicker({
+  const selection = await runInteractivePicker({
     sessions: discovery.sessions,
     targetWorkspace: targetCwd,
     initialQuery,
   });
 
   // User cancelled (Esc or Ctrl+C)
-  if (!selected) {
+  if (!selection) {
     return ExitCode.SUCCESS;
   }
+
+  const selected = selection.session;
+  const finalAgyArgs =
+    selection.agyArgs !== undefined ? selection.agyArgs : cliAgyArgs;
 
   // 7. --print-id
   if (opts.printId) {
@@ -372,7 +223,7 @@ export async function main(argv: string[] = process.argv): Promise<number> {
 
   // 8. --no-launch
   if (opts.launch === false) {
-    printSelectedSession(selected, passthroughArgs);
+    printSelectedSession(selected, finalAgyArgs);
     return ExitCode.SUCCESS;
   }
 
@@ -381,7 +232,7 @@ export async function main(argv: string[] = process.argv): Promise<number> {
   return await launchAntigravity(selected.id, {
     cwd: launchWorkspace,
     executablePath: opts.agyPath as string | undefined,
-    args: passthroughArgs,
+    args: finalAgyArgs,
   });
 }
 

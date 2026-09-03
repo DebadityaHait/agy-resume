@@ -19,8 +19,10 @@ describe("CLI commands", () => {
   it("outputs --help correctly", () => {
     const res = runCli(["--help"]);
     expect(res.status).toBe(0);
-    expect(res.stdout).toContain("Cross-platform workspace-scoped conversation picker");
-    expect(res.stdout).toContain("[-- <agy args...>]");
+    expect(res.stdout).toContain(
+      "Cross-platform workspace-scoped conversation picker"
+    );
+    expect(res.stdout).toContain("[--agy <agy arguments...>]");
     expect(res.stdout).toContain("--all");
     expect(res.stdout).toContain("--scope");
     expect(res.stdout).toContain("--json");
@@ -30,7 +32,7 @@ describe("CLI commands", () => {
   it("outputs --version correctly", () => {
     const res = runCli(["--version"]);
     expect(res.status).toBe(0);
-    expect(res.stdout.trim()).toBe("0.1.0");
+    expect(res.stdout.trim()).toBe("0.2.0");
   });
 
   it("outputs valid JSON array with --json", () => {
@@ -43,7 +45,10 @@ describe("CLI commands", () => {
     ]);
 
     expect(res.status).toBe(0);
-    const parsed = JSON.parse(res.stdout) as Array<{ id: string; workspace: string }>;
+    const parsed = JSON.parse(res.stdout) as Array<{
+      id: string;
+      workspace: string;
+    }>;
     expect(Array.isArray(parsed)).toBe(true);
     expect(parsed.length).toBe(2);
     expect(parsed.map((s) => s.id)).toContain("conv-ticktick-1");
@@ -61,7 +66,10 @@ describe("CLI commands", () => {
     ]);
 
     expect(res.status).toBe(0);
-    const parsed = JSON.parse(res.stdout) as Array<{ id: string; workspace: string }>;
+    const parsed = JSON.parse(res.stdout) as Array<{
+      id: string;
+      workspace: string;
+    }>;
     expect(parsed.length).toBeGreaterThanOrEqual(5);
   });
 
@@ -99,22 +107,53 @@ describe("CLI commands", () => {
     expect(res.status).not.toBe(0);
   });
 
-  it("rejects --conversation or -c after --", () => {
-    const res1 = runCli(["--", "--conversation", "other-id"]);
+  it("rejects conversation override through --agy (--conversation and = forms)", () => {
+    const res1 = runCli(["auth", "--agy", "--conversation", "other-id"]);
     expect(res1.status).not.toBe(0);
-    expect(res1.stderr).toContain("Cannot pass --conversation or -c");
+    expect(res1.stderr).toContain(
+      "Cannot pass --conversation through --agy because agyr manages conversation selection."
+    );
 
-    const res2 = runCli(["--", "-c", "other-id"]);
+    const res2 = runCli(["auth", "--agy", "--conversation=other-id"]);
     expect(res2.status).not.toBe(0);
-    expect(res2.stderr).toContain("Cannot pass --conversation or -c");
+    expect(res2.stderr).toContain(
+      "Cannot pass --conversation through --agy because agyr manages conversation selection."
+    );
+  });
 
-    const res3 = runCli(["--", "--conversation=other-id"]);
-    expect(res3.status).not.toBe(0);
-    expect(res3.stderr).toContain("Cannot pass --conversation or -c");
+  it("does not reject speculative -conversation through --agy", () => {
+    const res = runCli([
+      "patcher requirements",
+      "--no-launch",
+      "--data-dir",
+      STANDARD_DATA_DIR,
+      "--cwd",
+      "C:\\Projects\\ticktick",
+      "--agy",
+      "-conversation",
+      "other-id",
+    ]);
+    expect(res.status).toBe(0);
+    expect(res.stdout).toContain("Extra flags: -conversation other-id");
+  });
 
-    const res4 = runCli(["--", "-c=other-id"]);
-    expect(res4.status).not.toBe(0);
-    expect(res4.stderr).toContain("Cannot pass --conversation or -c");
+  it("does not block -c through --agy because -c is --continue in agy", () => {
+    const res = runCli([
+      "patcher requirements",
+      "--no-launch",
+      "--data-dir",
+      STANDARD_DATA_DIR,
+      "--cwd",
+      "C:\\Projects\\ticktick",
+      "--agy",
+      "-c",
+      "other-id",
+    ]);
+
+    expect(res.status).toBe(0);
+    expect(res.stdout).toContain("Selected conversation:");
+    expect(res.stdout).toContain("conv-ticktick-1");
+    expect(res.stdout).toContain("Extra flags: -c other-id");
   });
 
   it("displays extra flags when --no-launch is active with passthrough args", () => {
@@ -125,7 +164,7 @@ describe("CLI commands", () => {
       STANDARD_DATA_DIR,
       "--cwd",
       "C:\\Projects\\ticktick",
-      "--",
+      "--agy",
       "--dangerously-skip-permissions",
     ]);
 
@@ -151,7 +190,7 @@ describe("CLI commands", () => {
     expect(res.stdout).not.toContain("Extra flags:");
   });
 
-  it("forwards passthrough arguments after -- to the launcher when launching", () => {
+  it("forwards basic passthrough arguments after --agy to the launcher", () => {
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "agyr-cli-launch-"));
     const logFile = path.join(tempDir, "launch.log");
     const fakeAgyScript =
@@ -183,9 +222,8 @@ describe("CLI commands", () => {
         "C:\\Projects\\ticktick",
         "--agy-path",
         fakeAgyScript,
-        "--",
+        "--agy",
         "--dangerously-skip-permissions",
-        "--verbose",
       ]);
 
       expect(res.status).toBe(0);
@@ -194,10 +232,149 @@ describe("CLI commands", () => {
       expect(logContent).toMatch(/--conversation/);
       expect(logContent).toMatch(/conv-ticktick-1/);
       expect(logContent).toMatch(/--dangerously-skip-permissions/);
-      expect(logContent).toMatch(/--verbose/);
     } finally {
       fs.rmSync(tempDir, { recursive: true, force: true });
     }
+  });
+
+  it("forwards multiple passthrough arguments after --agy to the launcher", () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "agyr-cli-launch-"));
+    const logFile = path.join(tempDir, "launch.log");
+    const fakeAgyScript =
+      process.platform === "win32"
+        ? path.join(tempDir, "agy.cmd")
+        : path.join(tempDir, "agy");
+
+    if (process.platform === "win32") {
+      fs.writeFileSync(
+        fakeAgyScript,
+        `@echo off\r\necho %* > "${logFile}"\r\nexit /b 0\r\n`,
+        "utf-8"
+      );
+    } else {
+      fs.writeFileSync(
+        fakeAgyScript,
+        `#!/bin/sh\necho "$@" > "${logFile}"\nexit 0\n`,
+        "utf-8"
+      );
+      fs.chmodSync(fakeAgyScript, 0o755);
+    }
+
+    try {
+      const res = runCli([
+        "patcher requirements",
+        "--data-dir",
+        STANDARD_DATA_DIR,
+        "--cwd",
+        "C:\\Projects\\ticktick",
+        "--agy-path",
+        fakeAgyScript,
+        "--agy",
+        "--model",
+        "flash",
+        "--dangerously-skip-permissions",
+      ]);
+
+      expect(res.status).toBe(0);
+      expect(fs.existsSync(logFile)).toBe(true);
+      const logContent = fs.readFileSync(logFile, "utf-8");
+      expect(logContent).toMatch(/--conversation/);
+      expect(logContent).toMatch(/conv-ticktick-1/);
+      expect(logContent).toMatch(/--model/);
+      expect(logContent).toMatch(/flash/);
+      expect(logContent).toMatch(/--dangerously-skip-permissions/);
+    } finally {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it("keeps shared option names unambiguous across the --agy boundary", () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "agyr-cli-launch-"));
+    const logFile = path.join(tempDir, "launch.log");
+    const fakeAgyScript =
+      process.platform === "win32"
+        ? path.join(tempDir, "agy.cmd")
+        : path.join(tempDir, "agy");
+
+    if (process.platform === "win32") {
+      fs.writeFileSync(
+        fakeAgyScript,
+        `@echo off\r\necho %* > "${logFile}"\r\nexit /b 0\r\n`,
+        "utf-8"
+      );
+    } else {
+      fs.writeFileSync(
+        fakeAgyScript,
+        `#!/bin/sh\necho "$@" > "${logFile}"\nexit 0\n`,
+        "utf-8"
+      );
+      fs.chmodSync(fakeAgyScript, 0o755);
+    }
+
+    try {
+      const res = runCli([
+        "--debug",
+        "patcher requirements",
+        "--data-dir",
+        STANDARD_DATA_DIR,
+        "--cwd",
+        "C:\\Projects\\ticktick",
+        "--agy-path",
+        fakeAgyScript,
+        "--agy",
+        "--debug",
+      ]);
+
+      expect(res.status).toBe(0);
+      // First --debug activates agyr debug logger (outputs to stderr/stdout)
+      expect(res.stderr).toContain("[debug]");
+      // Second --debug is forwarded to agy
+      expect(fs.existsSync(logFile)).toBe(true);
+      const logContent = fs.readFileSync(logFile, "utf-8");
+      expect(logContent).toMatch(/--conversation/);
+      expect(logContent).toMatch(/--debug/);
+    } finally {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it("fails when unknown option is passed without --agy boundary (no auto-forwarding)", () => {
+    const res = runCli([
+      "patcher requirements",
+      "--data-dir",
+      STANDARD_DATA_DIR,
+      "--cwd",
+      "C:\\Projects\\ticktick",
+      "--model",
+      "flash",
+    ]);
+
+    expect(res.status).not.toBe(0);
+    expect(res.stderr).toContain("unknown option '--model'");
+  });
+
+  it("fails on typos through normal Commander option parsing", () => {
+    const res = runCli(["--scpoe", "repo"]);
+    expect(res.status).not.toBe(0);
+    expect(res.stderr).toContain("unknown option '--scpoe'");
+    expect(res.stderr).toContain("--scope");
+  });
+
+  it("handles empty passthrough (--agy without args) gracefully", () => {
+    const res = runCli([
+      "patcher requirements",
+      "--no-launch",
+      "--data-dir",
+      STANDARD_DATA_DIR,
+      "--cwd",
+      "C:\\Projects\\ticktick",
+      "--agy",
+    ]);
+
+    expect(res.status).toBe(0);
+    expect(res.stdout).toContain("Selected conversation:");
+    expect(res.stdout).toContain("conv-ticktick-1");
+    expect(res.stdout).not.toContain("Extra flags:");
   });
 
   it("fails in non-interactive mode when multiple conversations match and no submode specified", () => {
@@ -211,7 +388,55 @@ describe("CLI commands", () => {
     expect(res.stderr).toContain("Multiple conversations found");
   });
 
-  it("forwards unknown flags directly as passthrough args even without -- (PowerShell compatibility)", () => {
+  it("existing search/query regression test: queries with quotes and scopes work", () => {
+    const res = runCli([
+      "auth token",
+      "--scope",
+      "exact",
+      "--json",
+      "--data-dir",
+      STANDARD_DATA_DIR,
+      "--cwd",
+      "C:\\Projects\\ticktick",
+    ]);
+    expect(res.status).toBe(0);
+    const parsed = JSON.parse(res.stdout);
+    expect(Array.isArray(parsed)).toBe(true);
+  });
+
+  it("existing search/query regression test: agyr auth with --scope tree", () => {
+    const res = runCli([
+      "auth",
+      "--scope",
+      "tree",
+      "--json",
+      "--data-dir",
+      STANDARD_DATA_DIR,
+      "--cwd",
+      "C:\\Projects\\ticktick",
+    ]);
+    expect(res.status).toBe(0);
+    const parsed = JSON.parse(res.stdout) as Array<{ id: string }>;
+    expect(Array.isArray(parsed)).toBe(true);
+    expect(parsed.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("existing search/query regression test: agyr with --scope repo in git directory", () => {
+    const res = runCli([
+      "--scope",
+      "repo",
+      "--json",
+      "--data-dir",
+      STANDARD_DATA_DIR,
+      "--cwd",
+      process.cwd(),
+    ]);
+    expect(res.status).toBe(0);
+    const parsed = JSON.parse(res.stdout);
+    expect(Array.isArray(parsed)).toBe(true);
+  });
+
+  it("existing search/query regression test: agyr with query and --no-launch", () => {
     const res = runCli([
       "patcher requirements",
       "--no-launch",
@@ -219,19 +444,10 @@ describe("CLI commands", () => {
       STANDARD_DATA_DIR,
       "--cwd",
       "C:\\Projects\\ticktick",
-      "--dangerously-skip-permissions",
     ]);
-
     expect(res.status).toBe(0);
     expect(res.stdout).toContain("Selected conversation:");
     expect(res.stdout).toContain("conv-ticktick-1");
-    expect(res.stdout).toContain("Extra flags: --dangerously-skip-permissions");
-  });
-
-  it("suggests closest agyr option on typos", () => {
-    const res = runCli(["--scpoe", "repo"]);
-    expect(res.status).not.toBe(0);
-    expect(res.stderr).toContain('Unknown option "--scpoe". Did you mean "--scope"?');
   });
 
   it("exports main function which can be imported safely without auto-executing", async () => {
@@ -239,4 +455,3 @@ describe("CLI commands", () => {
     expect(typeof mod.main).toBe("function");
   });
 });
-
