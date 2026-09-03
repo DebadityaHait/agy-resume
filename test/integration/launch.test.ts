@@ -59,4 +59,57 @@ describe("launch integration", () => {
     expect(logContent).toMatch(/--conversation/);
     expect(logContent).toMatch(/test-session-123/);
   });
+
+  it("spawns fake agy with forwarded passthrough arguments", async () => {
+    const targetWorkspace = path.resolve(tempDir);
+    const exitCode = await launchAntigravity("test-session-123", {
+      cwd: targetWorkspace,
+      executablePath: fakeAgyScript,
+      args: ["--dangerously-skip-permissions", "--verbose"],
+    });
+
+    expect(exitCode).toBe(0);
+    expect(fs.existsSync(logFile)).toBe(true);
+
+    const logContent = fs.readFileSync(logFile, "utf-8");
+    expect(logContent).toMatch(/--conversation/);
+    expect(logContent).toMatch(/test-session-123/);
+    expect(logContent).toMatch(/--dangerously-skip-permissions/);
+    expect(logContent).toMatch(/--verbose/);
+  });
+
+  it("rejects --conversation or -c in passthrough args", async () => {
+    const targetWorkspace = path.resolve(tempDir);
+    await expect(
+      launchAntigravity("test-session-123", {
+        cwd: targetWorkspace,
+        executablePath: fakeAgyScript,
+        args: ["--conversation", "other-session"],
+      })
+    ).rejects.toThrow(/--conversation/);
+
+    await expect(
+      launchAntigravity("test-session-123", {
+        cwd: targetWorkspace,
+        executablePath: fakeAgyScript,
+        args: ["-c", "other-session"],
+      })
+    ).rejects.toThrow(/-c/);
+
+    await expect(
+      launchAntigravity("test-session-123", {
+        cwd: targetWorkspace,
+        executablePath: fakeAgyScript,
+        args: ["--conversation=other-session"],
+      })
+    ).rejects.toThrow(/--conversation/);
+
+    await expect(
+      launchAntigravity("test-session-123", {
+        cwd: targetWorkspace,
+        executablePath: fakeAgyScript,
+        args: ["-c=other-session"],
+      })
+    ).rejects.toThrow(/-c/);
+  });
 });

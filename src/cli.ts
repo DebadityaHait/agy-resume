@@ -1,6 +1,8 @@
+import fs from "node:fs";
+import { fileURLToPath } from "node:url";
 import { Command } from "commander";
 import pc from "picocolors";
-import type { DiscoveryOptions, JsonSession, ScopeMode } from "./types.js";
+import type { DiscoveryOptions, JsonSession, ScopeMode, Session } from "./types.js";
 import { ExitCode, AgyResumeError, InvalidArgumentError } from "./utils/errors.js";
 import { logger } from "./utils/logger.js";
 import { discoverSessions } from "./discovery/discover.js";
@@ -11,12 +13,58 @@ import { normalizeWorkspacePath } from "./paths/normalize.js";
 
 const PACKAGE_VERSION = "0.1.0";
 
+function printSelectedSession(
+  session: Session,
+  extraFlags: readonly string[]
+): void {
+  console.log(`\nSelected conversation:`);
+  console.log(`  ID:          ${pc.cyan(session.id)}`);
+  console.log(`  Title:       ${session.title || "(no title)"}`);
+  console.log(`  Workspace:   ${session.workspace || "(unknown)"}`);
+  if (session.messageCount !== undefined && session.messageCount > 0) {
+    console.log(`  Steps:       ${session.messageCount}`);
+  }
+  if (session.updatedAt) {
+    console.log(`  Updated:     ${session.updatedAt.toISOString()}`);
+  }
+  if (session.firstPrompt) {
+    console.log(`  Prompt:      ${session.firstPrompt}`);
+  }
+  if (extraFlags.length > 0) {
+    console.log(`  Extra flags: ${extraFlags.join(" ")}`);
+  }
+  console.log("");
+}
+
 export async function main(argv: string[] = process.argv): Promise<number> {
+  let userArgs: string[];
+  if (
+    argv === process.argv ||
+    (argv.length >= 2 &&
+      /node(\.exe)?$/i.test(argv[0]!) &&
+      /\.[cm]?[jt]s$/i.test(argv[1]!))
+  ) {
+    userArgs = argv.slice(2);
+  } else {
+    userArgs = argv;
+  }
+
+  let passthroughArgs: string[] = [];
+  let commanderArgs: string[];
+  const doubleDashIndex = userArgs.indexOf("--");
+  if (doubleDashIndex !== -1) {
+    commanderArgs = userArgs.slice(0, doubleDashIndex);
+    passthroughArgs = userArgs.slice(doubleDashIndex + 1);
+  } else {
+    commanderArgs = userArgs;
+  }
+
   const program = new Command();
 
   program
     .name("agyr")
     .description("Cross-platform workspace-scoped conversation picker for Google Antigravity CLI")
+    .usage("[options] [query...] [-- <agy args...>]")
     .version(PACKAGE_VERSION, "-v, --version", "output the current version")
     .argument("[query...]", "initial search query terms")
     .option("-a, --all", "show sessions from all workspaces")
@@ -34,7 +82,20 @@ export async function main(argv: string[] = process.argv): Promise<number> {
     .option("--debug", "enable diagnostic debug logging")
     .helpOption("-h, --help", "display help for command");
 
-  program.parse(argv);
+  program.parse(commanderArgs, { from: "user" });
+
+  const hasConversationArg = passthroughArgs.some(
+    (arg) =>
+      arg === "--conversation" ||
+      arg.startsWith("--conversation=") ||
+      arg === "-c" ||
+      arg.startsWith("-c=")
+  );
+  if (hasConversationArg) {
+    throw new InvalidArgumentError(
+      "Cannot pass --conversation or -c after -- because agy-resume manages the conversation ID."
+    );
+  }
 
   const opts = program.opts();
   const queryArgs = program.args;
@@ -129,8 +190,29 @@ export async function main(argv: string[] = process.argv): Promise<number> {
       return ExitCode.ERROR;
     }
 
+    if (opts.launch === false) {
+      if (discovery.sessions.length === 1) {
+        printSelectedSession(discovery.sessions[0]!, passthroughArgs);
+        return ExitCode.SUCCESS;
+      }
+      logger.error(
+        `Multiple conversations found (${discovery.sessions.length}) in non-interactive mode.\nProvide a specific query or use --json.`
+      );
+      return ExitCode.ERROR;
+    }
+
+    if (discovery.sessions.length === 1) {
+      const selected = discovery.sessions[0]!;
+      const launchWorkspace = resolveLaunchWorkspace(selected.workspace, targetCwd);
+      return await launchAntigravity(selected.id, {
+        cwd: launchWorkspace,
+        executablePath: opts.agyPath as string | undefined,
+        args: passthroughArgs,
+      });
+    }
+
     logger.error(
-      "Interactive picker requires a TTY terminal.\nUse `agyr --json` to inspect conversations in automated scripts."
+      `Multiple conversations found (${discovery.sessions.length}) in non-interactive mode.\nProvide a specific query or use --json.`
     );
     return ExitCode.ERROR;
   }
@@ -155,50 +237,68 @@ export async function main(argv: string[] = process.argv): Promise<number> {
 
   // 8. --no-launch
   if (opts.launch === false) {
-    console.log(`\nSelected conversation:`);
-    console.log(`  ID:          ${pc.cyan(selected.id)}`);
-    console.log(`  Title:       ${selected.title || "(no title)"}`);
-    console.log(`  Workspace:   ${selected.workspace || "(unknown)"}`);
-    if (selected.messageCount !== undefined && selected.messageCount > 0) {
-      console.log(`  Steps:       ${selected.messageCount}`);
-    }
-    if (selected.updatedAt) {
-      console.log(`  Updated:     ${selected.updatedAt.toISOString()}`);
-    }
-    if (selected.firstPrompt) {
-      console.log(`  Prompt:      ${selected.firstPrompt}`);
-    }
-    console.log("");
+    printSelectedSession(selected, passthroughArgs);
     return ExitCode.SUCCESS;
   }
 
   // 9. Launch Antigravity
-  const launchWorkspace = selected.workspace || targetCwd;
+  const launchWorkspace = resolveLaunchWorkspace(selected.workspace, targetCwd);
   return await launchAntigravity(selected.id, {
     cwd: launchWorkspace,
     executablePath: opts.agyPath as string | undefined,
+    args: passthroughArgs,
   });
 }
 
-// Execute CLI
-main().then(
-  (code) => {
-    process.exit(code);
-  },
-  (err: unknown) => {
-    if (err instanceof AgyResumeError) {
-      console.error(pc.red(`\n${err.message}\n`));
-      process.exit(err.exitCode);
-    } else if (err instanceof Error) {
-      if (logger.isDebug()) {
-        console.error(err);
-      } else {
-        console.error(pc.red(`\nError: ${err.message}\n`));
-      }
-      process.exit(ExitCode.ERROR);
-    } else {
-      console.error(pc.red(`\nUnexpected error: ${String(err)}\n`));
-      process.exit(ExitCode.ERROR);
-    }
+function resolveLaunchWorkspace(selectedWorkspace?: string, fallbackCwd?: string): string {
+  if (selectedWorkspace && fs.existsSync(selectedWorkspace)) {
+    return selectedWorkspace;
   }
-);
+  if (fallbackCwd && fs.existsSync(fallbackCwd)) {
+    return fallbackCwd;
+  }
+  return process.cwd();
+}
+
+function isDirectCliInvocation(): boolean {
+  if (!process.argv[1]) return false;
+  try {
+    const scriptPath = fs.realpathSync(process.argv[1]);
+    const modulePath = fs.realpathSync(fileURLToPath(import.meta.url));
+    return scriptPath === modulePath;
+  } catch {
+    return (
+      process.argv[1].endsWith("cli.js") ||
+      process.argv[1].endsWith("cli.ts") ||
+      process.argv[1].endsWith("agyr") ||
+      process.argv[1].endsWith("agy-resume") ||
+      process.argv[1].endsWith("agyr.cmd") ||
+      process.argv[1].endsWith("agy-resume.cmd")
+    );
+  }
+}
+
+// Execute CLI
+if (isDirectCliInvocation()) {
+  main().then(
+    (code) => {
+      process.exit(code);
+    },
+    (err: unknown) => {
+      if (err instanceof AgyResumeError) {
+        console.error(pc.red(`\n${err.message}\n`));
+        process.exit(err.exitCode);
+      } else if (err instanceof Error) {
+        if (logger.isDebug()) {
+          console.error(err);
+        } else {
+          console.error(pc.red(`\nError: ${err.message}\n`));
+        }
+        process.exit(ExitCode.ERROR);
+      } else {
+        console.error(pc.red(`\nUnexpected error: ${String(err)}\n`));
+        process.exit(ExitCode.ERROR);
+      }
+    }
+  );
+}

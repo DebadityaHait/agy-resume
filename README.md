@@ -102,17 +102,41 @@ Pass keywords directly to start with a pre-filtered list:
 agyr auth token
 ```
 
+### Argument Passthrough (`--`)
+
+You can pass extra flags and arguments directly to the underlying `agy` process by placing them after `--`. For example, to resume a session while bypassing permission prompts:
+
+```bash
+agyr auth token -- --dangerously-skip-permissions
+```
+
+When selected, `agyr` will execute:
+
+```bash
+agy --conversation <selected-id> --dangerously-skip-permissions
+```
+
+> [!NOTE]
+> `agyr` automatically manages the conversation ID. Passing `--conversation` or `-c` after `--` is rejected.
+
+To preview the selected conversation and the extra flags that would be forwarded without launching `agy`, use `--no-launch`:
+
+```bash
+agyr "auth token" --no-launch -- --dangerously-skip-permissions
+```
+
 ---
 
 ## 🎛️ CLI Options & Scoping Modes
 
 ```text
-Usage: agyr [options] [query...]
+Usage: agyr [options] [query...] [-- <agy args...>]
 
 Cross-platform workspace-scoped conversation picker for Google Antigravity CLI
 
 Arguments:
   query                   initial search query terms
+  -- <agy args...>        arguments forwarded directly to Antigravity CLI
 
 Options:
   -v, --version           output the current version

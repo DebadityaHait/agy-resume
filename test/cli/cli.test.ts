@@ -1,3 +1,5 @@
+import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import crossSpawn from "cross-spawn";
 import { describe, it, expect } from "vitest";
@@ -18,6 +20,7 @@ describe("CLI commands", () => {
     const res = runCli(["--help"]);
     expect(res.status).toBe(0);
     expect(res.stdout).toContain("Cross-platform workspace-scoped conversation picker");
+    expect(res.stdout).toContain("[-- <agy args...>]");
     expect(res.stdout).toContain("--all");
     expect(res.stdout).toContain("--scope");
     expect(res.stdout).toContain("--json");
@@ -94,5 +97,122 @@ describe("CLI commands", () => {
   it("handles invalid arguments with non-zero exit code", () => {
     const res = runCli(["--scope", "invalid-scope-mode"]);
     expect(res.status).not.toBe(0);
+  });
+
+  it("rejects --conversation or -c after --", () => {
+    const res1 = runCli(["--", "--conversation", "other-id"]);
+    expect(res1.status).not.toBe(0);
+    expect(res1.stderr).toContain("Cannot pass --conversation or -c");
+
+    const res2 = runCli(["--", "-c", "other-id"]);
+    expect(res2.status).not.toBe(0);
+    expect(res2.stderr).toContain("Cannot pass --conversation or -c");
+
+    const res3 = runCli(["--", "--conversation=other-id"]);
+    expect(res3.status).not.toBe(0);
+    expect(res3.stderr).toContain("Cannot pass --conversation or -c");
+
+    const res4 = runCli(["--", "-c=other-id"]);
+    expect(res4.status).not.toBe(0);
+    expect(res4.stderr).toContain("Cannot pass --conversation or -c");
+  });
+
+  it("displays extra flags when --no-launch is active with passthrough args", () => {
+    const res = runCli([
+      "patcher requirements",
+      "--no-launch",
+      "--data-dir",
+      STANDARD_DATA_DIR,
+      "--cwd",
+      "C:\\Projects\\ticktick",
+      "--",
+      "--dangerously-skip-permissions",
+    ]);
+
+    expect(res.status).toBe(0);
+    expect(res.stdout).toContain("Selected conversation:");
+    expect(res.stdout).toContain("conv-ticktick-1");
+    expect(res.stdout).toContain("Extra flags: --dangerously-skip-permissions");
+  });
+
+  it("does not display extra flags when --no-launch is active without passthrough args", () => {
+    const res = runCli([
+      "patcher requirements",
+      "--no-launch",
+      "--data-dir",
+      STANDARD_DATA_DIR,
+      "--cwd",
+      "C:\\Projects\\ticktick",
+    ]);
+
+    expect(res.status).toBe(0);
+    expect(res.stdout).toContain("Selected conversation:");
+    expect(res.stdout).toContain("conv-ticktick-1");
+    expect(res.stdout).not.toContain("Extra flags:");
+  });
+
+  it("forwards passthrough arguments after -- to the launcher when launching", () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "agyr-cli-launch-"));
+    const logFile = path.join(tempDir, "launch.log");
+    const fakeAgyScript =
+      process.platform === "win32"
+        ? path.join(tempDir, "agy.cmd")
+        : path.join(tempDir, "agy");
+
+    if (process.platform === "win32") {
+      fs.writeFileSync(
+        fakeAgyScript,
+        `@echo off\r\necho %* > "${logFile}"\r\nexit /b 0\r\n`,
+        "utf-8"
+      );
+    } else {
+      fs.writeFileSync(
+        fakeAgyScript,
+        `#!/bin/sh\necho "$@" > "${logFile}"\nexit 0\n`,
+        "utf-8"
+      );
+      fs.chmodSync(fakeAgyScript, 0o755);
+    }
+
+    try {
+      const res = runCli([
+        "patcher requirements",
+        "--data-dir",
+        STANDARD_DATA_DIR,
+        "--cwd",
+        "C:\\Projects\\ticktick",
+        "--agy-path",
+        fakeAgyScript,
+        "--",
+        "--dangerously-skip-permissions",
+        "--verbose",
+      ]);
+
+      expect(res.status).toBe(0);
+      expect(fs.existsSync(logFile)).toBe(true);
+      const logContent = fs.readFileSync(logFile, "utf-8");
+      expect(logContent).toMatch(/--conversation/);
+      expect(logContent).toMatch(/conv-ticktick-1/);
+      expect(logContent).toMatch(/--dangerously-skip-permissions/);
+      expect(logContent).toMatch(/--verbose/);
+    } finally {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it("fails in non-interactive mode when multiple conversations match and no submode specified", () => {
+    const res = runCli([
+      "--data-dir",
+      STANDARD_DATA_DIR,
+      "--cwd",
+      "C:\\Projects\\ticktick",
+    ]);
+    expect(res.status).not.toBe(0);
+    expect(res.stderr).toContain("Multiple conversations found");
+  });
+
+  it("exports main function which can be imported safely without auto-executing", async () => {
+    const mod = await import("../../src/cli.js");
+    expect(typeof mod.main).toBe("function");
   });
 });
